@@ -14,7 +14,7 @@ def compile(tree)
       when :fcall
         compile_fcall(tree)
       when :array
-        compile_fcall(tree)
+        compile_array(tree)
       when :lit
         compile_lit(tree)
       when :str
