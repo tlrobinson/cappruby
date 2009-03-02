@@ -1,5 +1,6 @@
 #!/usr/bin/ruby
 
+require "rubygems"
 require "parse_tree"
 require "pp"
 require "unified_ruby"
@@ -7,8 +8,10 @@ require "unified_ruby"
 #$DEBUG = true
 
 # TODO: optimize by only adding this preamble to methods that actually might call "yield"
-RbYield = "_rbYield" # "yield" is apparently a reserveed
-RbFunctionPreamble = "var #{RbYield}=window._rbBlock||window._rbNoBlock;\n"
+RbYield = "_rbYield" # "yield" is apparently a reserved
+RbBlockGiven = "block_given_"
+RbFunctionPreamble =  "var #{RbYield}=window._rbBlock||window._rbNoBlock,\n"+
+                      "    #{RbBlockGiven}=window._rbBlock?_rbBlockGiven:_rbBlockNotGiven;\n"
 
 class Ruby2Objj < SexpProcessor
   
@@ -32,9 +35,6 @@ class Ruby2Objj < SexpProcessor
   
   def process_str(exp)    exp[0].dump end
   
-  def process_const(exp)  exp[0].to_s end
-  def process_lvar(exp)   exp[0].to_s end
-  
   def process_lit(exp)
     case exp[0].class.to_s
       when "Symbol" then
@@ -44,27 +44,50 @@ class Ruby2Objj < SexpProcessor
       end
     else
   end
+  
+  def process_lvar(exp)   exp[0].to_s end
+  def process_gvar(exp)   "window[#{exp[0].to_s.dump}]" end
+  def process_const(exp)  "window[#{exp[0].to_s.dump}]" end
 
-  def process_array(exp)
-    "[" + process_array_raw(exp).join(",") + "]"
-  end
-
-  def process_array_raw(exp)
-    exp.map { |element| process(element) }
-  end
-
+  # local assigmnent
   def process_lasgn(exp)
     name, value = exp
-    
     if value
-      "var " + name.to_s + "=" + process(value)
+      "var #{name.to_s}=#{process(value)}"
+    else
+      # for unified ruby block args.
+      name.to_s
+    end
+  end
+  
+  # global assignment
+  def process_gasgn(exp)
+    name, value = exp
+    if value
+      # FIXME: use something other than "window" as root scope?
+      "window[#{name.to_s.dump}]=#{process(value)}"
     else
       ""
     end
   end
   
+  # constant declaration
+  def process_cdecl(exp)
+    name, value = exp
+    if value
+      # TODO: check to make sure it hasn't already been defined, throw a warning
+      "window[#{name.to_s.dump}]=#{process(value)}"
+    else
+      ""
+    end
+  end
+
+  def process_array(exp)
+    "[" + exp.map { |element| process(element) }.join(",") + "]"
+  end
+  
   def process_block(exp)
-    # FIXME: auto-return the last statement of appropriate blocks?
+    # FIXME: auto-return the last statement of blocks somehow?
     exp.map { |statement| process(statement) + ";" }.join("\n")
   end
   
@@ -72,19 +95,29 @@ class Ruby2Objj < SexpProcessor
     process(exp[0])
   end
   
-  def process_fcall(exp)
+  def process_arglist(exp)
+    exp.map { |arg| process(arg) }.join(",")
+  end
+  
+  def process_args(exp)
+    exp.map { |arg| arg.to_s }.join(",")
+  end
+  
+  def process_fcall(exp, block=nil)
     name, args = exp
     
     name = name.to_s
-    arguments = args ? process_array_raw(args[1..-1]).join(",") : ""
+    arguments = process(args)
     
     # FIXME: kinda hacky? needed unless we want to do synchronous imports
     if name == "import"
-      "@import #{args[1].to_s.dump}"
+      "@import #{args[0][0].dump}"
     elsif name == "import_lib"
-      "@import <#{args[1].to_s}>"
+      "@import <#{args[0][0]}>"
     else
-      "#{name}(#{arguments})"
+      name.gsub!(/[^_a-zA-Z0-9]/, "_")
+      block ||= "null"
+      "(((_rbBlock=#{block})&&false)||#{name}(#{arguments}))"
     end
   end
   
@@ -94,45 +127,49 @@ class Ruby2Objj < SexpProcessor
   end
   
   def process_defn(exp)
-    name, scope = exp
+    name, args, scope = exp
     
     type, block = scope
     throw "*** expected :scope" if type != :scope
     
-    type, args = block[0..1]
+    type = block[0]
     throw "*** expected :block" if type != :block
     
-    arguments = args[1..-1].map{|arg| arg.to_s }.join(",")
-    
-    name = name.to_s
+    # FIXME: better encoding of disallowed characters to prevent collisions?
+    name = name.to_s.gsub(/[^_a-zA-Z0-9]/, "_")
+    arguments = process(args)
     
     method = "function(#{arguments}){\n"
     method << indent(RbFunctionPreamble)
-    method << indent(process_block(block[2..-1]))
+    method << indent(process(block))
     method << "\n}"
     
     "#{name}=#{method}"
   end
 
   def process_defn_instance(exp, klass)
-      name, scope = exp
+      name, args, scope = exp
 
       type, block = scope
       throw "*** expected :scope" if type != :scope
 
-      type, args = block[0..1]
+      type = block[0]
       throw "*** expected :block" if type != :block
 
       selector = name.to_s.gsub(/_/, ":")
       
-      arguments = helper_process_args(args, true)
+      arguments = process(args)
       
-      # for debug purposes we give the method a name, but it could be anonymous (make this an empty string)
+      # for debug purposes we give the method a name, but it could be anonymous (i.e. make this an empty string)
       method_name = " $_"+klass.to_s.gsub(/[^a-zA-Z0-9_]/, "_")+"__"+selector.gsub(/[^a-zA-Z0-9_]/, "_")
       
-      method = "function#{method_name}(self,_cmd#{arguments}){with(self){\n"
+      if arguments.length > 0
+        method = "function#{method_name}(self,_cmd,#{arguments}){with(self){\n"
+      else
+        method = "function#{method_name}(self,_cmd){with(self){\n"
+      end
       method << indent(RbFunctionPreamble)
-      method << indent(process_block(block[2..-1]))
+      method << indent(process(block))
       method << "\n}}"
       
       "new objj_method(sel_getUid(#{selector.dump}),#{method})"
@@ -142,69 +179,68 @@ class Ruby2Objj < SexpProcessor
     "return " + process(exp[0])
   end
   
-  def helper_process_args(args, continued=false)
-    if args && args.length > 1
-      (continued ? "," : "") + args[1..-1].map{ |arg| (arg.kind_of? Symbol) ? arg.to_s : process(arg) }.join(",")
-    else
-      ""
-    end
-  end
-  
   def process_yield(exp)
-    args = exp[0]
-    
-    if args.nil?
-      arguments = ""
-    elsif args[0] == :array
-      arguments = helper_process_args(args)
-    else
-      arguments = process(args)
-    end
+    arguments = process_arglist(exp)
     
     "#{RbYield}(#{arguments})"
   end
   
-  def process_call(exp)
+  def process_call(exp, block=nil)
     object, selector, arguments = exp
     
-    rb_msgSend_helper("null", process(object), selector.to_s, helper_process_args(arguments))
-  end
-  
-  def rb_msgSend_helper(block, object, selector, arguments)
-    selector = selector.dump
-    
-    if arguments.length > 0
-      "rb_msgSend(#{block},#{object},#{selector},#{arguments})"
+    if (object.nil?)
+      process_fcall(exp[1..-1], block)
     else
-      "rb_msgSend(#{block},#{object},#{selector})"
+      block ||= "null"
+      object = process(object)
+      selector = selector.to_s.dump
+      arguments = process(arguments)
+      
+      if arguments && arguments.length > 0
+        "rb_msgSend(#{block},#{object},#{selector},#{arguments})"
+      else
+        "rb_msgSend(#{block},#{object},#{selector})"
+      end
+#      rb_msgSend_helper(block, process(object), selector.to_s, process(arguments))
     end
   end
   
+#  def rb_msgSend_helper(block, object, selector, arguments)
+#    selector = selector.dump
+#    
+#    if arguments && arguments.length > 0
+#      "rb_msgSend(#{block},#{object},#{selector},#{arguments})"
+#    else
+#      "rb_msgSend(#{block},#{object},#{selector})"
+#    end
+#  end
+  
   def process_iter(exp)
-    call, block_args = exp
-    block = exp[2..-1]
+    call, block_args, block = exp
     
     arguments = process(block_args) || ""
     
     method = "function(#{arguments}){\n"
     method << indent(RbFunctionPreamble)
-    method << indent(process_block(block))
+    method << indent(process(block))
     method << "\n}"
     
-    if call[0] == :fcall
-      # kind of a big hack so that we set _rbBlock without breaking nested calls, etc
-      "(((window._rbBlock=#{method})&&false)||#{process(call)})"
-    elsif call[0] == :call
-      call_sym, object, selector, args = call
-      rb_msgSend_helper(method, process(object), selector.to_s,  helper_process_args(args))
-    else
-      throw "*** oh noes!"
-    end
+    process_call(call[1..-1], method)
+    #if call[0] == :fcall
+    #  # kind of a big hack so that we set _rbBlock without breaking nested calls, etc
+    #  process_fcall(call, method)
+    #  #"(((window._rbBlock=#{method})&&false)||#{process(call)})"
+    #elsif call[0] == :call
+    #  call_sym, object, selector, args = call
+    #  rb_msgSend_helper(method, process(object), selector.to_s, process(args))
+    #else
+    #  throw "*** oh noes!"
+    #end
   end
   
   def process_masgn(exp)
     array, unknown = exp
-    process_array_raw(array[1..-1]).join(",")
+    array[1..-1].map { |element| process(element) }.join(",")
   end
   
   def process_dasgn_curr(exp)
@@ -216,10 +252,10 @@ class Ruby2Objj < SexpProcessor
   end
   
   def process_if(exp)
-    # FIXME optimize "else if"
+    # FIXME optimize "else if"?
     condition, block, else_block = exp
     
-    result = "if("+process(condition)+"){\n" + indent(process(block)) + "\n}"
+    result = "if("+process(condition)+"){" + (block.nil? ? "" : ("\n" + process(block) + "\n")) + "}"
     unless else_block.nil?
       result << "else{\n" + indent(process(else_block)) + "\n}"
     end
@@ -313,6 +349,10 @@ class Ruby2Objj < SexpProcessor
     exp[0].to_s
   end
   
+  def process_self(exp)
+    "self"
+  end
+  
   #def process_defs(exp)
   #end
   
@@ -330,18 +370,24 @@ class Ruby2Objj < SexpProcessor
   end
 end
 
-source = File.read(ARGV[0])
-sexp = ParseTree.translate(source)
+if __FILE__ == $0
+  
+  source = File.read(ARGV[0])
+  sexp = ParseTree.translate(source)
 
-puts "/*"
-pp sexp
-puts "*/"
+  puts "/*"
+  pp sexp
+  puts "*/"
 
-#unifier = Unifier.new
-#unifier.processors.each do |p|
-#  p.unsupported.delete :cfunc # HACK
-#end
-#sexp = unifier.process(sexp)
-#pp sexp
+  puts "\n/*"
+  unifier = Unifier.new
+  #unifier.processors.each do |p|
+  #  p.unsupported.delete :cfunc # HACK
+  #end
+  sexp = unifier.process(sexp)
+  pp sexp
+  puts "*/"
 
-puts Ruby2Objj.new.process(sexp)
+  puts Ruby2Objj.new.process(sexp)
+
+end

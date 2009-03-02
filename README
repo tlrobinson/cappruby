@@ -1,0 +1,9 @@
+Requirements:
+    - ParseTree gem
+
+Run:
+    ./ruby2objj.rb main.rb > main.j
+
+OR
+
+    ./ruby2objj_server.rb TestApp

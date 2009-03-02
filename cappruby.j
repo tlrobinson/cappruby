@@ -1,43 +1,15 @@
 @import <Foundation/Foundation.j>
 
+@import "cappruby/Array.j"
+@import "cappruby/Number.j"
+@import "cappruby/Object.j"
+@import "cappruby/String.j"
+
+puts = alert;
+
 window._rbNoBlock = function() { throw new Error("no block given"); }
-
-@implementation CPArray (Ruby)
-
-- (CPArray)map
-{
-    var _rbYield=window._rbBlock||window._rbNoBlock; // FIXME: how? needed in Obj-J method defs that use yield.
-    
-    var result = [];
-    for (var i = 0; i < self.length; i++)
-        result.push(_rbYield(self[i]));
-    return result;
-}
-
-- (void)each
-{
-    [self map];
-}
-
-@end
-
-
-@implementation CPObject (Ruby)
-
-+ (CPArray)ancestors
-{
-    var ancestors = [],
-        klass = self;   
-    while (klass)
-    {
-        ancestors.push(klass);
-        klass = klass.super_class;
-    }
-    return ancestors;
-}
-
-@end
-
+window._rbBlockGiven = function() { return true; }
+window._rbBlockNotGiven = function() { return false; }
 
 function rb_msgSend(aBlock, aReceiver, aSelector)
 {
@@ -101,46 +73,3 @@ function rb_msgSend(aBlock, aReceiver, aSelector)
     
     // return undefined?
 }
-
-class_addMethods(CPString,[
-    new objj_method(sel_getUid("+"),    function(self,_cmd,other){with(self){ return self + other; }})
-]);
-
-class_addMethods(CPNumber,[
-    new objj_method(sel_getUid("%"),    function(self,_cmd,other){with(self){ return self % other; }}),
-    new objj_method(sel_getUid("&"),    function(self,_cmd,other){with(self){ return self & other; }}),
-    new objj_method(sel_getUid("*"),    function(self,_cmd,other){with(self){ return self * other; }}),
-    new objj_method(sel_getUid("**"),   function(self,_cmd,other){with(self){ return Math.pow(self, other); }}),
-    new objj_method(sel_getUid("+"),    function(self,_cmd,other){with(self){ return self + other; }}),
-    new objj_method(sel_getUid("-"),    function(self,_cmd,other){with(self){ return self - other; }}),
-    new objj_method(sel_getUid("/"),    function(self,_cmd,other){with(self){ return self / other; }}),
-    new objj_method(sel_getUid("<"),    function(self,_cmd,other){with(self){ return self < other; }}),
-    new objj_method(sel_getUid("<<"),   function(self,_cmd,other){with(self){ return self << other; }}),
-    new objj_method(sel_getUid("<="),   function(self,_cmd,other){with(self){ return self <= other; }}),
-    new objj_method(sel_getUid("<=>"),  function(self,_cmd,other){with(self){ return self === other ? 0 : nil; }}),
-    new objj_method(sel_getUid("=="),   function(self,_cmd,other){with(self){ return self === other; }}),
-    new objj_method(sel_getUid(">"),    function(self,_cmd,other){with(self){ return self > other; }}),
-    new objj_method(sel_getUid(">="),   function(self,_cmd,other){with(self){ return self >= other; }}),
-    new objj_method(sel_getUid(">>"),   function(self,_cmd,other){with(self){ return self >> other; }}),
-    new objj_method(sel_getUid("[]"),   function(self,_cmd,other){with(self){ return (self >> other) & 0x01; }}),
-    new objj_method(sel_getUid("^"),    function(self,_cmd,other){with(self){ return self ^ other; }}),
-    new objj_method(sel_getUid("abs"),  function(self,_cmd)      {with(self){ return Math.abs(self); }}),
-    //new objj_method(sel_getUid("dclone"),    function(self,_cmd,other){with(self){ return self - other; }}),
-    new objj_method(sel_getUid("div"),  function(self,_cmd,other){with(self){ return self / other; }}),
-    new objj_method(sel_getUid("divmod"),function(self,_cmd,other){with(self){ return [FLOOR(self / other),self % other]; }}), // FIXME (no integeters?)
-    //new objj_method(sel_getUid("id2name"),function(self,_cmd,other){with(self){ return self % other; }}),
-    new objj_method(sel_getUid("modulo"),function(self,_cmd,other){with(self){ return self % other; }}),
-    //new objj_method(sel_getUid("power!"),function(self,_cmd,other){with(self){ return self % other; }}),
-    //new objj_method(sel_getUid("quo"),function(self,_cmd,other){with(self){ return self % other; }}),
-    //new objj_method(sel_getUid("rdiv"),function(self,_cmd,other){with(self){ return self % other; }}),
-    //new objj_method(sel_getUid("rpower"),function(self,_cmd,other){with(self){ return self % other; }}),
-    //new objj_method(sel_getUid("size"), function(self,_cmd)      {with(self){ return self; }}),
-    //new objj_method(sel_getUid("to_f"), function(self,_cmd)      {with(self){ return self; }}), // NOP?
-    new objj_method(sel_getUid("to_s"), function(self,_cmd)      {with(self){ return self.toString(); }}),
-    //new objj_method(sel_getUid("to_sym"),function(self,_cmd)      {with(self){ return self; }}),
-    new objj_method(sel_getUid("zero?"),function(self,_cmd)      {with(self){ return self === 0; }}),
-    new objj_method(sel_getUid("|"),    function(self,_cmd,other){with(self){ return self | other; }}),
-    new objj_method(sel_getUid("~"),    function(self,_cmd)      {with(self){ return ~self; }})
-]);
-
-puts = alert;

@@ -10,7 +10,7 @@ import_lib "AppKit/AppKit.j"
 
 import "cappruby.j"
 
-import "AppController.j"
+import "AppController.rb"
 
 
 def main(args, namedArgs)
