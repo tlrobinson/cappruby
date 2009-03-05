@@ -1,9 +1,13 @@
 Requirements:
     - ParseTree gem
 
-Run:
+To see a simple example in action, run:
     ./ruby2objj.rb main.rb > main.j
 
-OR
+To run TestApp, ensure that the `Frameworks` directory exists:
 
-    ./ruby2objj_server.rb TestApp
+    cd TestApp
+    ln -s /path/to/Frameworks Frameworks
+
+Then run:
+    ./ruby2objj_server.ru TestApp
