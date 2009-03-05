@@ -41,7 +41,8 @@ end
 use Rack::CommonLogger
 use Rack::ShowExceptions
 use Rack::ShowStatus
-use Rack::Lint
+# use Rack::Lint
+# use Rack::ContentLength
 
 puts "[#{ARGV[1]}]"
 
