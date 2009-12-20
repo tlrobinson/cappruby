@@ -1,0 +1,10 @@
+{
+    "name": "CappRuby",
+    "dependencies": ["objective-j", "cappuccino"],
+    "preload": ["cappruby/loader"],
+    "objj-frameworks": ["Frameworks"],
+    "description": "Experimental Ruby implementation on top of the Objective-J runtime / JavaScript",
+    "keywords": ["ruby", "objective-j", "objj", "objective j", "cappuccino"],
+    "author": "Tom Robinson (http://tlrobinson.net/)",
+    "version": "0.0.1"
+}

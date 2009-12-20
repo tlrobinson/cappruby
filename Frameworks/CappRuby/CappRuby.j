@@ -5,6 +5,8 @@
 @import "Object.j"
 @import "String.j"
 
+// TODO: better way of defining selectors with characters invalid in Obj-J but valid in Ruby
+
 puts = alert;
 
 window._rbNoBlock = function() { throw new Error("no block given"); }
