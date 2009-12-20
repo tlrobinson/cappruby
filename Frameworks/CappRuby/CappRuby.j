@@ -1,9 +1,9 @@
 @import <Foundation/Foundation.j>
 
-@import "cappruby/Array.j"
-@import "cappruby/Number.j"
-@import "cappruby/Object.j"
-@import "cappruby/String.j"
+@import "Array.j"
+@import "Number.j"
+@import "Object.j"
+@import "String.j"
 
 puts = alert;
 

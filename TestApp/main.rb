@@ -7,8 +7,7 @@
 
 import_lib "Foundation/Foundation.j"
 import_lib "AppKit/AppKit.j"
-
-import "cappruby.j"
+import_lib "CappRuby/CappRuby.j"
 
 import "AppController.rb"
 
